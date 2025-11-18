@@ -1,224 +1,360 @@
-import { useState, useEffect } from "react";
-import {
-  FaTimes,
-  FaBuilding,
-  FaDoorOpen,
-  FaUser,
-  FaCoffee,
-  FaUsers,
-} from "react-icons/fa";
-import DateInput from "./Form/DateInput";
-import SelectInput from "./Form/SelectInput";
-import TimeInput from "./Form/TimeInput";
-import TextInput from "./Form/TextInput";
-import TextArea from "./Form/TextArea";
-import CheckboxInput from "./form/CheckboxInput";
-import NumberInput from "./Form/NumberInput";
+// components/ReservationForm.jsx
+import { useState, useEffect } from 'react';
+import { FaTimes, FaCalendarAlt, FaUser, FaCoffee, FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
 
-const ReservationForm = ({ onClose, onSubmit, reservation, title }) => {
+const ReservationForm = ({ onClose, onSubmit, reservation, title, locais, salas ,errorForm}) => {
   const [formData, setFormData] = useState({
-    local: "",
-    sala: "",
-    data: "",
-    hora_inicio: "",
-    hora_fim: "",
-    responsavel: "",
-    descricao: "",
+    local: '',
+    sala: '',
+    data_inicio: '',
+    data_fim: '',
+    responsavel: '',
+    descricao: '',
     cafe: false,
-    quantidade_cafe: "",
+    quantidade_cafe: 0
   });
 
-  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [salasFiltradas, setSalasFiltradas] = useState([]);
+  const [error, setError] = useState('');
 
+  // Preencher form se estiver editando
   useEffect(() => {
     if (reservation) {
-      const data = new Date(reservation.data_inicio);
       setFormData({
-        local: reservation.local,
-        sala: reservation.sala,
-        data: data.toISOString().split("T")[0],
-        hora_inicio: data.toTimeString().slice(0, 5),
-        hora_fim: new Date(reservation.data_fim).toTimeString().slice(0, 5),
-        responsavel: reservation.responsavel,
-        descricao: reservation.descricao || "",
-        cafe: reservation.cafe,
-        quantidade_cafe: reservation.quantidade_cafe || "",
+        local: reservation.local || '',
+        sala: reservation.sala || '',
+        data_inicio: reservation.data_inicio ? reservation.data_inicio.slice(0, 16) : '',
+        data_fim: reservation.data_fim ? reservation.data_fim.slice(0, 16) : '',
+        responsavel: reservation.responsavel || '',
+        descricao: reservation.descricao || '',
+        cafe: reservation.cafe || false,
+        quantidade_cafe: reservation.quantidade_cafe || 0
       });
+
+      if (reservation.local) {
+        const localSelecionado = locais.find(l => l.name === reservation.local);
+        if (localSelecionado) {
+          const salasDoLocal = salas.filter(sala => sala.location_id === localSelecionado.id);
+          setSalasFiltradas(salasDoLocal);
+        }
+      }
     }
-  }, [reservation]);
+  }, [reservation, locais, salas]);
+
+  // Filtrar salas quando o local mudar
+  useEffect(() => {
+    if (formData.local) {
+      const localSelecionado = locais.find(l => l.name === formData.local);
+      
+      if (localSelecionado) {
+        const salasDoLocal = salas.filter(sala => sala.location_id === localSelecionado.id);
+        setSalasFiltradas(salasDoLocal);
+      } else {
+        setSalasFiltradas([]);
+      }
+      
+      setFormData(prev => ({ ...prev, sala: '' }));
+    } else {
+      setSalasFiltradas([]);
+    }
+  }, [formData.local, locais, salas]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    // Validação 
+    if(errorForm.code == 409) {
+      setError('error 409');
+
+      return 
+    } 
+    
+    if (!formData.local || !formData.sala || !formData.data_inicio || !formData.data_fim || !formData.responsavel) {
+      setError('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
+
+    if (new Date(formData.data_fim) <= new Date(formData.data_inicio)) {
+      setError('A data de fim deve ser posterior à data de início');
+      return;
+    }
+
+
+    setLoading(true);
+
+    try {
+      // Converter para o formato esperado pela API
+      const reservaData = {
+        local: formData.local,
+        sala: formData.sala,
+        data_inicio: new Date(formData.data_inicio).toISOString(),
+        data_fim: new Date(formData.data_fim).toISOString(),
+        responsavel: formData.responsavel,
+        descricao: formData.descricao,
+        cafe: formData.cafe,
+        quantidade_cafe: formData.cafe ? parseInt(formData.quantidade_cafe) : 0
+      };
+
+      await onSubmit(reservaData);
+    } catch (error) {
+      console.error('Erro no formulário:', error);
+      
+      // VERIFICA SE É ERRO 409 (CONFLITO DE HORÁRIO)
+      console.log(error);
+      if (error.message && error.message.includes('409')) {
+        // FECHA O MODAL AUTOMATICAMENTE
+        setTimeout(() => {
+          onClose();
+        }, 2000); // Fecha após 2 segundos para o usuário ver a mensagem
+        setError('Já existe uma reserva neste horário. O modal será fechado automaticamente.');
+      } else {
+        // Outros erros continuam mostrando a mensagem normalmente
+        setError(error.message || 'Erro ao salvar reserva. Tente novamente.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: type === 'checkbox' ? checked : value
     }));
-
-    if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.local) newErrors.local = "Obrigatório";
-    if (!formData.sala) newErrors.sala = "Obrigatório";
-    if (!formData.data) newErrors.data = "Obrigatório";
-    if (!formData.hora_inicio) newErrors.hora_inicio = "Obrigatório";
-    if (!formData.hora_fim) newErrors.hora_fim = "Obrigatório";
-    if (!formData.responsavel.trim()) newErrors.responsavel = "Obrigatório";
-
-    if (formData.cafe && (!formData.quantidade_cafe || formData.quantidade_cafe < 1)) {
-      newErrors.quantidade_cafe = "Mínimo 1";
-    }
-
-    if (formData.hora_inicio >= formData.hora_fim) {
-      newErrors.hora_fim = "Fim deve ser depois do início";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const locais = ["Matriz", "Filial"];
-  const salasPorLocal = {
-    Matriz: ["Sala 101", "Sala 102", "Sala 103", "Sala Reuniões", "Auditório"],
-    Filial: ["Sala 201", "Sala 202", "Sala 203", "Sala VIP", "Espaço Criatividade"],
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    onSubmit({
-      local: formData.local,
-      sala: formData.sala,
-      data_inicio: `${formData.data}T${formData.hora_inicio}:00`,
-      data_fim: `${formData.data}T${formData.hora_fim}:00`,
-      responsavel: formData.responsavel,
-      descricao: formData.descricao,
-      cafe: formData.cafe,
-      quantidade_cafe: formData.cafe ? Number(formData.quantidade_cafe) : null,
-    });
+    if (error) setError('');
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl overflow-y-auto max-h-[90vh]">
-        <div className="flex justify-between items-center p-6 bg-blue-600 text-white rounded-t-xl">
-          <h2 className="text-xl font-bold">{title}</h2>
-          <button onClick={onClose}>
-            <FaTimes className="text-2xl" />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+            disabled={loading}
+          >
+            <FaTimes size={20} />
           </button>
         </div>
 
+        {/* Mensagem de erro DENTRO do modal */}
+        {error && (
+          <div className={`mx-6 mt-4 border rounded-lg p-4 ${
+            error.includes('409') 
+              ? 'bg-orange-50 border-orange-200' 
+              : 'bg-red-50 border-red-200'
+          }`}>
+            <div className="flex items-start space-x-3">
+              <FaExclamationTriangle className={`mt-0.5 flex-shrink-0 ${
+                error.includes('409') ? 'text-orange-500' : 'text-red-500'
+              }`} />
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${
+                  error.includes('409') ? 'text-orange-800' : 'text-red-800'
+                }`}>
+                  {error.includes('409') ? 'Conflito de horário' : 'Não foi possível salvar a reserva'}
+                </p>
+                <p className={`text-sm mt-1 ${
+                  error.includes('409') ? 'text-orange-700' : 'text-red-700'
+                }`}>
+                  {error}
+                </p>
+              </div>
+              <button 
+                onClick={() => setError('')}
+                className={`flex-shrink-0 ${
+                  error.includes('409') ? 'text-orange-500 hover:text-orange-700' : 'text-red-500 hover:text-red-700'
+                }`}
+              >
+                <FaTimes size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Resto do formulário permanece igual */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SelectInput
-              label="Local *"
-              icon={FaBuilding}
+          {/* Local */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FaUser className="inline mr-2 text-gray-400" />
+              Local *
+            </label>
+            <select
               name="local"
               value={formData.local}
               onChange={handleChange}
-              error={errors.local}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
             >
-              <option value="">Selecione o local</option>
-              {locais.map((l) => (
-                <option key={l} value={l}>{l}</option>
+              <option value="">Selecione um local</option>
+              {locais.map(local => (
+                <option key={local.id} value={local.name}>
+                  {local.name}
+                </option>
               ))}
-            </SelectInput>
+            </select>
+          </div>
 
-            <SelectInput
-              label="Sala *"
-              icon={FaDoorOpen}
+          {/* Sala */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Sala *
+            </label>
+            <select
               name="sala"
               value={formData.sala}
               onChange={handleChange}
-              error={errors.sala}
-              disabled={!formData.local}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={!formData.local || loading}
             >
-              <option value="">Selecione a sala</option>
-              {formData.local &&
-                salasPorLocal[formData.local]?.map((sala) => (
-                  <option key={sala} value={sala}>{sala}</option>
-                ))}
-            </SelectInput>
+              <option value="">
+                {!formData.local 
+                  ? 'Selecione um local primeiro' 
+                  : salasFiltradas.length === 0 
+                    ? 'Nenhuma sala disponível neste local'
+                    : 'Selecione uma sala'
+                }
+              </option>
+              {salasFiltradas.map(sala => (
+                <option key={sala.id} value={sala.name}>
+                  {sala.name} {sala.capacity && `- Capacidade: ${sala.capacity}`}
+                </option>
+              ))}
+            </select>
+            {formData.local && salasFiltradas.length === 0 && (
+              <p className="text-sm text-yellow-600 mt-1">
+                Não há salas cadastradas para este local
+              </p>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <DateInput
-              label="Data *"
-              name="data"
-              value={formData.data}
+          {/* Data e Hora de Início */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FaCalendarAlt className="inline mr-2 text-gray-400" />
+              Data e Hora de Início *
+            </label>
+            <input
+              type="datetime-local"
+              name="data_inicio"
+              value={formData.data_inicio}
               onChange={handleChange}
-              min={new Date().toISOString().split("T")[0]}
-              error={errors.data}
-            />
-
-            <TimeInput
-              label="Início *"
-              name="hora_inicio"
-              value={formData.hora_inicio}
-              onChange={handleChange}
-              error={errors.hora_inicio}
-            />
-
-            <TimeInput
-              label="Fim *"
-              name="hora_fim"
-              value={formData.hora_fim}
-              onChange={handleChange}
-              error={errors.hora_fim}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
             />
           </div>
 
-          <TextInput
-            label="Responsável *"
-            icon={FaUser}
-            name="responsavel"
-            value={formData.responsavel}
-            onChange={handleChange}
-            error={errors.responsavel}
-          />
+          {/* Data e Hora de Fim */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FaCalendarAlt className="inline mr-2 text-gray-400" />
+              Data e Hora de Fim *
+            </label>
+            <input
+              type="datetime-local"
+              name="data_fim"
+              value={formData.data_fim}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
 
-          <TextArea
-            label="Descrição"
-            name="descricao"
-            value={formData.descricao}
-            onChange={handleChange}
-          />
+          {/* Responsável */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <FaUser className="inline mr-2 text-gray-400" />
+              Responsável *
+            </label>
+            <input
+              type="text"
+              name="responsavel"
+              value={formData.responsavel}
+              onChange={handleChange}
+              placeholder="Nome do responsável pela reserva"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+              disabled={loading}
+            />
+          </div>
 
-          <CheckboxInput
-            label="Oferecer café"
-            icon={FaCoffee}
-            name="cafe"
-            checked={formData.cafe}
-            onChange={handleChange}
-          />
+          {/* Descrição */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Descrição
+            </label>
+            <textarea
+              name="descricao"
+              value={formData.descricao}
+              onChange={handleChange}
+              placeholder="Descrição da reunião ou evento"
+              rows="3"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={loading}
+            />
+          </div>
 
+          {/* Café */}
+          <div className="flex items-center space-x-3">
+            <input
+              type="checkbox"
+              name="cafe"
+              checked={formData.cafe}
+              onChange={handleChange}
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              disabled={loading}
+            />
+            <label className="flex items-center text-sm font-medium text-gray-700">
+              <FaCoffee className="inline mr-2 text-gray-400" />
+              Serviço de café
+            </label>
+          </div>
+
+          {/* Quantidade de Café */}
           {formData.cafe && (
-            <NumberInput
-              label="Quantidade de pessoas"
-              icon={FaUsers}
-              name="quantidade_cafe"
-              value={formData.quantidade_cafe}
-              onChange={handleChange}
-              min={1}
-              max={50}
-              error={errors.quantidade_cafe}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Quantidade de café (pessoas)
+              </label>
+              <input
+                type="number"
+                name="quantidade_cafe"
+                value={formData.quantidade_cafe}
+                onChange={handleChange}
+                min="1"
+                max="50"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loading}
+              />
+            </div>
           )}
 
-          <div className="flex justify-end gap-4 pt-4 border-t">
-            <button type="button" onClick={onClose} className="px-6 py-3 border rounded-lg">
+          {/* Botões */}
+          <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              disabled={loading}
+            >
               Cancelar
             </button>
-
-            <button type="submit" className="px-6 py-3 bg-blue-600 text-white rounded-lg">
-              {reservation ? "Salvar Alterações" : "Criar Reserva"}
+            <button
+              type="submit"
+              disabled={loading || !formData.local || !formData.sala || !formData.data_inicio || !formData.data_fim || !formData.responsavel}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading && <FaSpinner className="animate-spin" />}
+              {loading ? 'Salvando...' : (reservation ? 'Atualizar' : 'Criar')}
             </button>
           </div>
         </form>

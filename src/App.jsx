@@ -1,13 +1,16 @@
-import  { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FaCalendarAlt, FaSearch, FaPlus } from 'react-icons/fa';
 import Header from './components/Header';
 import ReservationCard from './components/ReservationCard';
 import ReservationForm from './components/ReservationForm';
 import DeleteModal from './components/DeleteModal';
 import ReservationButton from './components/ReservationButton';
+import { apiService } from './services/api';
 
 const App = () => {
   const [reservations, setReservations] = useState([]);
+  const [locais, setLocais] = useState([]);
+  const [salas, setSalas] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingReservation, setEditingReservation] = useState(null);
@@ -15,88 +18,127 @@ const App = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLocal, setSelectedLocal] = useState('');
   const [loading, setLoading] = useState(true);
-
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [errorForm, setErrorForm] = useState(null);
+  // Buscar dados da API
   useEffect(() => {
-    setTimeout(() => {
-      const mockReservas = [
-        {
-          id: 1,
-          local: 'Matriz',
-          sala: 'Sala 101',
-          data_inicio: '2024-11-18T14:00:00',
-          data_fim: '2024-11-18T16:00:00',
-          responsavel: 'João Silva',
-          descricao: 'Reunião de planejamento estratégico trimestral',
-          cafe: true,
-          quantidade_cafe: 8,
-          status: 'active'
-        },
-        {
-          id: 2,
-          local: 'Filial',
-          sala: 'Sala 203',
-          data_inicio: '2024-11-19T09:00:00',
-          data_fim: '2024-11-19T10:30:00',
-          responsavel: 'Maria Santos',
-          descricao: 'Apresentação para novos clientes internacionais',
-          cafe: false,
-          quantidade_cafe: null,
-          status: 'active'
-        },
-        {
-          id: 3,
-          local: 'Matriz',
-          sala: 'Auditório',
-          data_inicio: '2024-11-20T15:00:00',
-          data_fim: '2024-11-20T17:00:00',
-          responsavel: 'Carlos Oliveira',
-          descricao: 'Treinamento de novas ferramentas de desenvolvimento',
-          cafe: true,
-          quantidade_cafe: 15,
-          status: 'active'
-        }
-      ];
-      setReservations(mockReservas);
-      setLoading(false);
-    }, 1000);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [locaisData, salasData, reservasData] = await Promise.all([
+          apiService.getLocais(),
+          apiService.getSalas(),
+          apiService.getReservations()
+        ]);
+        
+        setLocais(locaisData);
+        setSalas(salasData);
+        setReservations(reservasData);
+        
+      } catch (err) {
+        setError('Erro ao carregar dados. Verifique se a API está rodando.');
+        console.error('Erro:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
+  // Criar reserva
+  const handleCreateReservation = async (reservaData) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      const newReservation = await apiService.createReservation(reservaData);
+      console.log(errorForm)
+      // Atualizar a lista de reservas
+      setReservations(prev => [...prev, newReservation]);
+      setShowForm(false);
+      setSuccess('Reserva criada com sucesso!');
+      
+      // Limpar mensagem de sucesso após 3 segundos
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (err) {
+      setError(`Erro ao criar reserva: ${err.message}`);
+      setErrorForm(err)
+      
+      console.error('Erro ao criar reserva:', err);
+    }
+  };
+
+  // Editar reserva
+  const handleEditReservation = async (reservaData) => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      const updatedReservation = await apiService.updateReservation(
+        editingReservation.id, 
+        reservaData
+      );
+      
+      // Atualizar a lista de reservas
+      setReservations(prev => 
+        prev.map(r => r.id === editingReservation.id ? updatedReservation : r)
+      );
+      
+      setEditingReservation(null);
+      setSuccess('Reserva atualizada com sucesso!');
+      
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (err) {
+      setError(`Erro ao atualizar reserva: ${err.message}`);
+      console.error('Erro ao atualizar reserva:', err);
+    }
+  };
+
+  // Deletar reserva
+  const handleDeleteReservation = async () => {
+    try {
+      setError(null);
+      setSuccess(null);
+      
+      await apiService.deleteReservation(deletingReservation.id);
+      
+      // Remover da lista de reservas
+      setReservations(prev => prev.filter(r => r.id !== deletingReservation.id));
+      setShowDeleteModal(false);
+      setDeletingReservation(null);
+      setSuccess('Reserva deletada com sucesso!');
+      
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (err) {
+      setError(`Erro ao deletar reserva: ${err.message}`);
+      console.error('Erro ao deletar reserva:', err);
+    }
+  };
+
+  // Filtrar reservas baseado nos locais
   const filteredReservations = reservations.filter(reserva => {
-    const matchesSearch = reserva.sala.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         reserva.responsavel.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLocal = !selectedLocal || reserva.local === selectedLocal;
+    const matchesSearch = reserva.room?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         reserva.responsible_person?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const localEncontrado = locais.find(local => local.name === reserva.location);
+    const matchesLocal = !selectedLocal || localEncontrado?.id.toString() === selectedLocal;
+    
     return matchesSearch && matchesLocal;
   });
-
-  const handleCreateReservation = (reservaData) => {
-    const newReservation = {
-      id: Date.now(),
-      ...reservaData,
-      status: 'active'
-    };
-    setReservations(prev => [...prev, newReservation]);
-    setShowForm(false);
-  };
-
-  const handleEditReservation = (reservaData) => {
-    setReservations(prev => 
-      prev.map(r => r.id === editingReservation.id ? { ...r, ...reservaData } : r)
-    );
-    setEditingReservation(null);
-  };
-
-  const handleDeleteReservation = () => {
-    setReservations(prev => prev.filter(r => r.id !== deletingReservation.id));
-    setShowDeleteModal(false);
-    setDeletingReservation(null);
-  };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando reservas...</p>
+          <p className="mt-4 text-gray-600">Carregando dados...</p>
         </div>
       </div>
     );
@@ -104,11 +146,38 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-200">
-      <Header onNewReservation={() => setShowForm(true)}  />
+      <Header onNewReservation={() => setShowForm(true)} />
       
-      <main className="container mx-auto px-4 py-8 ">
+      <main className="container mx-auto px-4 py-8">
+        {/* Mensagem de erro */}
+        {error && (
+          <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            <div className="flex justify-between items-center">
+              <span>{error}</span>
+              <button 
+                onClick={() => setError(null)}
+                className="text-red-700 hover:text-red-900"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
-
+        {/* Mensagem de sucesso */}
+        {success && (
+          <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+            <div className="flex justify-between items-center">
+              <span>{success}</span>
+              <button 
+                onClick={() => setSuccess(null)}
+                className="text-green-700 hover:text-green-900"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6 border border-gray-200">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -137,8 +206,11 @@ const App = () => {
                 onChange={(e) => setSelectedLocal(e.target.value)}
               >
                 <option value="">Todos os locais</option>
-                <option value="Matriz">Matriz</option>
-                <option value="Filial">Filial</option>
+                {locais.map(local => (
+                  <option key={local.id} value={local.id}>
+                    {local.name}
+                  </option>
+                ))}
               </select>
 
               <ReservationButton onNewReservation={() => setShowForm(true)}/>
@@ -146,15 +218,49 @@ const App = () => {
           </div>
         </div>
 
+        {/* Grid de reservas */}
         {filteredReservations.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredReservations.map(reserva => (
               <ReservationCard
                 key={reserva.id}
-                reserva={reserva}
-                onEdit={() => setEditingReservation(reserva)}
+                reserva={{
+                  id: reserva.id,
+                  local: reserva.location,
+                  sala: reserva.room,
+                  data_inicio: reserva.start_datetime,
+                  data_fim: reserva.end_datetime,
+                  responsavel: reserva.responsible_person,
+                  descricao: reserva.description,
+                  cafe: reserva.coffee,
+                  quantidade_cafe: reserva.coffee_quantity,
+                  status: 'active'
+                }}
+                onEdit={() => setEditingReservation({
+                  id: reserva.id,
+                  local: reserva.location,
+                  sala: reserva.room,
+                  data_inicio: reserva.start_datetime,
+                  data_fim: reserva.end_datetime,
+                  responsavel: reserva.responsible_person,
+                  descricao: reserva.description,
+                  cafe: reserva.coffee,
+                  quantidade_cafe: reserva.coffee_quantity,
+                  status: 'active'
+                })}
                 onDelete={() => {
-                  setDeletingReservation(reserva);
+                  setDeletingReservation({
+                    id: reserva.id,
+                    local: reserva.location,
+                    sala: reserva.room,
+                    data_inicio: reserva.start_datetime,
+                    data_fim: reserva.end_datetime,
+                    responsavel: reserva.responsible_person,
+                    descricao: reserva.description,
+                    cafe: reserva.coffee,
+                    quantidade_cafe: reserva.coffee_quantity,
+                    status: 'active'
+                  });
                   setShowDeleteModal(true);
                 }}
               />
@@ -189,11 +295,15 @@ const App = () => {
         )}
       </main>
 
+      {/* Modais */}
       {showForm && (
         <ReservationForm
           onClose={() => setShowForm(false)}
           onSubmit={handleCreateReservation}
           title="Nova Reserva"
+          locais={locais}
+          salas={salas}
+          errorForm={errorForm}
         />
       )}
 
@@ -203,6 +313,9 @@ const App = () => {
           onSubmit={handleEditReservation}
           reservation={editingReservation}
           title="Editar Reserva"
+          locais={locais}
+          salas={salas}
+          errorForm={errorForm}
         />
       )}
 
