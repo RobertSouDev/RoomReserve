@@ -70,6 +70,7 @@ const App = () => {
       setErrorForm(err)
       
       console.error('Erro ao criar reserva:', err);
+      throw err
     }
   };
 

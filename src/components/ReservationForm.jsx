@@ -65,12 +65,7 @@ const ReservationForm = ({ onClose, onSubmit, reservation, title, locais, salas 
     setError('');
     
     // Validação 
-    if(errorForm.code == 409) {
-      setError('error 409');
-
-      return 
-    } 
-    
+ 
     if (!formData.local || !formData.sala || !formData.data_inicio || !formData.data_fim || !formData.responsavel) {
       setError('Por favor, preencha todos os campos obrigatórios');
       return;
@@ -103,11 +98,11 @@ const ReservationForm = ({ onClose, onSubmit, reservation, title, locais, salas 
       
       // VERIFICA SE É ERRO 409 (CONFLITO DE HORÁRIO)
       console.log(error);
-      if (error.message && error.message.includes('409')) {
-        // FECHA O MODAL AUTOMATICAMENTE
-        setTimeout(() => {
-          onClose();
-        }, 2000); // Fecha após 2 segundos para o usuário ver a mensagem
+      if (error.code === 409) {
+        
+        // setTimeout(() => {
+        //   onClose();
+        // }, 2000); 
         setError('Já existe uma reserva neste horário. O modal será fechado automaticamente.');
       } else {
         // Outros erros continuam mostrando a mensagem normalmente
@@ -142,39 +137,7 @@ const ReservationForm = ({ onClose, onSubmit, reservation, title, locais, salas 
         </div>
 
         {/* Mensagem de erro DENTRO do modal */}
-        {error && (
-          <div className={`mx-6 mt-4 border rounded-lg p-4 ${
-            error.includes('409') 
-              ? 'bg-orange-50 border-orange-200' 
-              : 'bg-red-50 border-red-200'
-          }`}>
-            <div className="flex items-start space-x-3">
-              <FaExclamationTriangle className={`mt-0.5 flex-shrink-0 ${
-                error.includes('409') ? 'text-orange-500' : 'text-red-500'
-              }`} />
-              <div className="flex-1">
-                <p className={`text-sm font-medium ${
-                  error.includes('409') ? 'text-orange-800' : 'text-red-800'
-                }`}>
-                  {error.includes('409') ? 'Conflito de horário' : 'Não foi possível salvar a reserva'}
-                </p>
-                <p className={`text-sm mt-1 ${
-                  error.includes('409') ? 'text-orange-700' : 'text-red-700'
-                }`}>
-                  {error}
-                </p>
-              </div>
-              <button 
-                onClick={() => setError('')}
-                className={`flex-shrink-0 ${
-                  error.includes('409') ? 'text-orange-500 hover:text-orange-700' : 'text-red-500 hover:text-red-700'
-                }`}
-              >
-                <FaTimes size={14} />
-              </button>
-            </div>
-          </div>
-        )}
+      
 
         {/* Resto do formulário permanece igual */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -356,7 +319,41 @@ const ReservationForm = ({ onClose, onSubmit, reservation, title, locais, salas 
               {loading && <FaSpinner className="animate-spin" />}
               {loading ? 'Salvando...' : (reservation ? 'Atualizar' : 'Criar')}
             </button>
+            
           </div>
+            {error && (
+          <div className={`mx-6 mt-4 border rounded-lg p-4 ${
+            error.includes('409') 
+              ? 'bg-orange-50 border-orange-200' 
+              : 'bg-red-50 border-red-200'
+          }`}>
+            <div className="flex items-start space-x-3">
+              <FaExclamationTriangle className={`mt-0.5 flex-shrink-0 ${
+                error.includes('409') ? 'text-orange-500' : 'text-red-500'
+              }`} />
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${
+                  error.includes('409') ? 'text-orange-800' : 'text-red-800'
+                }`}>
+                  {error.includes('409') ? 'Conflito de horário' : 'Não foi possível salvar a reserva'}
+                </p>
+                <p className={`text-sm mt-1 ${
+                  error.includes('409') ? 'text-orange-700' : 'text-red-700'
+                }`}>
+                  {error}
+                </p>
+              </div>
+              <button 
+                onClick={() => setError('')}
+                className={`flex-shrink-0 ${
+                  error.includes('409') ? 'text-orange-500 hover:text-orange-700' : 'text-red-500 hover:text-red-700'
+                }`}
+              >
+                <FaTimes size={14} />
+              </button>
+            </div>
+          </div>
+        )}
         </form>
       </div>
     </div>
